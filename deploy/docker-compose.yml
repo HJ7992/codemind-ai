@@ -1,0 +1,147 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请配置 MySQL root 占位密码}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-codemind}
+      MYSQL_USER: ${MYSQL_USER:-codemind}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请配置 MySQL 应用占位密码}
+      TZ: UTC
+    volumes:
+      - codemind-mysql:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  qdrant:
+    build:
+      context: ../deploy
+      dockerfile: qdrant.Dockerfile
+    volumes:
+      - codemind-qdrant:/qdrant/storage
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:6333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    environment:
+      CODEMIND_BIND_HOST: 0.0.0.0
+      CODEMIND_DATABASE_URL: ${CODEMIND_DATABASE_URL:?请配置后端 JDBC 地址}
+      CODEMIND_DATABASE_USERNAME: ${CODEMIND_DATABASE_USERNAME:-codemind}
+      CODEMIND_DATABASE_PASSWORD: ${CODEMIND_DATABASE_PASSWORD:?请配置后端数据库占位密码}
+      CODEMIND_SOURCE_ROOT: /data/sources
+      CODEMIND_AI_BASE_URL: http://ai-service:8000
+      CODEMIND_INTERNAL_SERVICE_TOKEN: ${CODEMIND_INTERNAL_SERVICE_TOKEN:?请配置内部服务 Token}
+      CODEMIND_PRIVACY_NOTICE_VERSION: ${CODEMIND_PRIVACY_NOTICE_VERSION:-2026-10-29.v1}
+      CODEMIND_CHAT_BASE_URL: ${CODEMIND_CHAT_BASE_URL:?请配置 Chat 地址}
+      CODEMIND_EMBEDDING_BASE_URL: ${CODEMIND_EMBEDDING_BASE_URL:?请配置 Embedding 地址}
+      CODEMIND_INDEX_MAX_ATTEMPTS: ${CODEMIND_INDEX_MAX_ATTEMPTS:-2}
+    volumes:
+      - codemind-sources:/data/sources
+    networks:
+      - edge
+      - internal
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ../ai-service
+    environment:
+      CODEMIND_QDRANT_URL: http://qdrant:6333
+      CODEMIND_QDRANT_COLLECTION: ${CODEMIND_QDRANT_COLLECTION:-codemind_chunks}
+      CODEMIND_SOURCE_ROOT: /data/sources
+      CODEMIND_INTERNAL_SERVICE_TOKEN: ${CODEMIND_INTERNAL_SERVICE_TOKEN:?请配置内部服务 Token}
+      CODEMIND_CHAT_BASE_URL: ${CODEMIND_CHAT_BASE_URL:?请配置 Chat 地址}
+      CODEMIND_CHAT_MODEL: ${CODEMIND_CHAT_MODEL:?请配置 Chat 模型}
+      CODEMIND_CHAT_API_KEY: ${CODEMIND_CHAT_API_KEY:?请配置 Chat 密钥}
+      CODEMIND_EMBEDDING_BASE_URL: ${CODEMIND_EMBEDDING_BASE_URL:?请配置 Embedding 地址}
+      CODEMIND_EMBEDDING_MODEL: ${CODEMIND_EMBEDDING_MODEL:?请配置 Embedding 模型}
+      CODEMIND_EMBEDDING_API_KEY: ${CODEMIND_EMBEDDING_API_KEY:?请配置 Embedding 密钥}
+      CODEMIND_EMBEDDING_DIMENSIONS: ${CODEMIND_EMBEDDING_DIMENSIONS:-1536}
+    volumes:
+      - codemind-sources:/data/sources:ro
+    networks:
+      - internal
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+    ports:
+      - "${CODEMIND_BIND_HOST:-127.0.0.1}:5173:8080"
+    networks:
+      - edge
+    depends_on:
+      backend:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    restart: unless-stopped
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    # 不发布宿主机端口，但保留 AI 访问外部模型 API 的出站能力。
+
+volumes:
+  codemind-mysql:
+  codemind-qdrant:
+  codemind-sources:

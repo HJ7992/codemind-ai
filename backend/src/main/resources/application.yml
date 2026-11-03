@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: codemind-backend
+  datasource:
+    url: ${CODEMIND_DATABASE_URL:jdbc:mysql://127.0.0.1:3306/codemind?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${CODEMIND_DATABASE_USERNAME:codemind}
+    password: ${CODEMIND_DATABASE_PASSWORD:codemind}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+codemind:
+  source-root: ${CODEMIND_SOURCE_ROOT:deploy/data/sources}
+  ai:
+    base-url: ${CODEMIND_AI_BASE_URL:http://127.0.0.1:8000}
+    internal-service-token: ${CODEMIND_INTERNAL_SERVICE_TOKEN:}
+    index-timeout-seconds: ${CODEMIND_AI_INDEX_TIMEOUT_SECONDS:1800}
+    qa-timeout-seconds: ${CODEMIND_AI_QA_TIMEOUT_SECONDS:60}
+    max-attempts: ${CODEMIND_INDEX_MAX_ATTEMPTS:2}
+  privacy:
+    notice-version: ${CODEMIND_PRIVACY_NOTICE_VERSION:2026-10-29.v1}
+    chat:
+      base-url: ${CODEMIND_CHAT_BASE_URL:}
+    embedding:
+      base-url: ${CODEMIND_EMBEDDING_BASE_URL:}
+  upload:
+    max-zip-bytes: ${CODEMIND_UPLOAD_MAX_ZIP_BYTES:52428800}
+    max-uncompressed-bytes: ${CODEMIND_UPLOAD_MAX_UNCOMPRESSED_BYTES:209715200}
+    max-entries: ${CODEMIND_UPLOAD_MAX_ENTRIES:10000}
+    max-source-file-bytes: ${CODEMIND_UPLOAD_MAX_SOURCE_FILE_BYTES:2097152}
+    max-path-depth: ${CODEMIND_UPLOAD_MAX_PATH_DEPTH:20}
+    max-compression-ratio: ${CODEMIND_UPLOAD_MAX_COMPRESSION_RATIO:100}
+
+server:
+  address: ${CODEMIND_BIND_HOST:127.0.0.1}
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

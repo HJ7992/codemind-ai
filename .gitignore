@@ -9,8 +9,16 @@ wheels/
 # Virtual environments
 .venv
 
+# Java and frontend outputs
+target/
+node_modules/
+coverage/
+
 # Local secrets and runtime data
 .env
 .env.*
 !.env.example
 deploy/data/
+
+# Qdrant 本地启动标记
+.qdrant-initialized

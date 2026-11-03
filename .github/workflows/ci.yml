@@ -1,0 +1,70 @@
+name: CodeMind AI CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Spring Boot 测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: 执行后端测试与格式检查
+        run: ./mvnw -B verify
+
+  ai-service:
+    name: FastAPI 静态检查与测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-service
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 uv 和 Python 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: 安装锁定依赖
+        run: uv sync --frozen --group dev
+      - name: 执行 Ruff 检查
+        run: uv run ruff check .
+      - name: 检查 Python 格式
+        run: uv run ruff format --check .
+      - name: 执行 AI 服务测试
+        run: uv run pytest
+
+  frontend:
+    name: 前端类型检查、测试与构建
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 安装锁定依赖
+        run: npm ci
+      - name: 执行 TypeScript 类型检查
+        run: npm run typecheck
+      - name: 执行前端测试
+        run: npm test
+      - name: 构建生产资源
+        run: npm run build
